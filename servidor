@@ -4,6 +4,7 @@ from tcp import Servidor
 import re
 
 msganterior = b''
+dictnicks = {}
 
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
@@ -16,6 +17,7 @@ def sair(conexao):
 
 def dados_recebidos(conexao, dados):
     global msganterior
+    global dictnicks
 
     dados = dados + msganterior
     if dados == b'':
@@ -25,14 +27,31 @@ def dados_recebidos(conexao, dados):
 
     if dados.endswith(b'\n'):
         msganterior = b''
+        if dadosatual[0].startswith(b'PING'):
+            conexao.enviar(b':server PONG server :' + dadosatual[0].split(b' ', 1)[1] + b'\n')
+
+        if dadosatual[0].startswith(b'NICK'):
+            nick = dadosatual[0].split(b' ',1)[1]
+            nick = nick.split(b'\r')[0]
+            if validar_nome(nick):
+                if conexao not in dictnicks.keys():
+                        if nick not in dictnicks.values(): 
+                            dictnicks[conexao] = nick
+                            conexao.enviar(b':server 001 ' + nick + b' :Welcome\r\n')
+                            conexao.enviar(b':server 422 ' + nick + b' :MOTD File is missing\r\n')
+                        else:
+                            conexao.enviar(b':server 433 ' + conexao + b' ' + nick + b' :Nickname is already in use\r\n')
+                else: 
+                    if nick not in dictnicks.values():
+                        conexao.enviar(b':' + dictnicks[conexao] + b' NICK ' + nick + b'\r\n')
+                        dictnicks[conexao] = nick
+                    else:
+                        conexao.enviar(b':server 433 ' + dictnicks[conexao] + b' ' + nick + b' :Nickname is already in use\r\n')
+            else:
+                conexao.enviar(b':server 432 * ' + nick + b' :Erroneous nickname\r\n')
     else:
         msganterior = dadosatual[len(dadosatual)-1]
-
-    if dadosatual[0].startswith(b'PING'):
-        conexao.enviar(b':server PONG server :' + dadosatual[0].split(b' ', 1)[1] + b'\n')
-
-    #if dadosatual[0].startswith(b'NICK'):
-        
+      
     print(conexao, dados)
 
 
