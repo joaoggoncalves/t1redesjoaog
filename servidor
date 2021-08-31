@@ -5,7 +5,7 @@ import re
 
 msganterior = b''
 dictnicks = {}
-#msgcompleta = False
+dictnicksupper = {}
 
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
@@ -19,7 +19,7 @@ def sair(conexao):
 def dados_recebidos(conexao, dados):
     global msganterior
     global dictnicks
-    #global msgcompleta
+    global dictnicksupper
 
     dados = msganterior + dados
     if dados == b'':
@@ -29,12 +29,10 @@ def dados_recebidos(conexao, dados):
 
     if dados.endswith(b'\n'):
         msganterior = b''
-        #msgcompleta = True
+
     else:
         msganterior = dadosatual[len(dadosatual)-1]
-        #msgcompleta = False
 
-    #if msgcompleta:
     for msgparcial in range(len(dadosatual)-1):
         #TRATAMENTO PING
         if dadosatual[msgparcial].startswith(b'PING'):
@@ -44,23 +42,37 @@ def dados_recebidos(conexao, dados):
         if dadosatual[msgparcial].startswith(b'NICK'):
             nick = dadosatual[msgparcial].split(b' ',1)[1]
             nick = nick.split(b'\r')[0]
+            nickupper = nick.upper()
             if validar_nome(nick):
                 if conexao not in dictnicks.keys():
-                        if nick not in dictnicks.values(): 
+                        if nick not in dictnicks.values() and nickupper not in dictnicksupper.values(): 
                             dictnicks[conexao] = nick
+                            dictnicksupper[conexao] = nickupper
                             conexao.enviar(b':server 001 ' + nick + b' :Welcome\r\n')
                             conexao.enviar(b':server 422 ' + nick + b' :MOTD File is missing\r\n')
                         else:
-                            conexao.enviar(b':server 433 ' + conexao + b' ' + nick + b' :Nickname is already in use\r\n')
+                            conexao.enviar(b':server 433 * ' + nick + b' :Nickname is already in use\r\n')
                 else: 
-                    if nick not in dictnicks.values():
+                    if nick not in dictnicks.values() and nickupper not in dictnicksupper.values():
                         conexao.enviar(b':' + dictnicks[conexao] + b' NICK ' + nick + b'\r\n')
                         dictnicks[conexao] = nick
+                        dictnicksupper[conexao] = nickupper
                     else:
                         conexao.enviar(b':server 433 ' + dictnicks[conexao] + b' ' + nick + b' :Nickname is already in use\r\n')
             else:
                 conexao.enviar(b':server 432 * ' + nick + b' :Erroneous nickname\r\n')
-    #msgcompleta = False
+        
+        #TRATAMENTO PRIVMSG
+        if dadosatual[msgparcial].startswith(b'PRIVMSG'):
+            nickdest = dadosatual[msgparcial].split(b' ')[1]
+            conteudo = dadosatual[msgparcial].split(b' :',1)[1]
+            nickdestupper = nickdest.upper()
+            if nickdestupper in dictnicksupper.values():
+                for key, value in dictnicksupper.items():
+                    if value == nickdestupper:
+                        key.enviar(b':' + dictnicks[conexao] + b' PRIVMSG ' + nickdest + b' :' + conteudo + b'\n') 
+                #conexaodest.enviar(b':' + dictnicks[conexao] + b' PRIVMSG ' + dictnicks[conexaodest] + b' :' + conteudo + b'\r\n') 
+
       
     print(conexao, dados)
 
