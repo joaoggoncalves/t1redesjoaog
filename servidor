@@ -13,6 +13,16 @@ def validar_nome(nome):
 
 
 def sair(conexao):
+    global dictcanais
+    global dictnicks
+    nick = dictnicks[conexao]
+    dictnicksupper.pop(conexao)
+    dictnicks.pop(conexao)
+    for canaisuser in dictcanais.keys():
+        if conexao in dictcanais[canaisuser]:
+            dictcanais[canaisuser].remove(conexao)
+            for x in range(len(dictcanais[canaisuser])):
+                dictcanais[canaisuser][x-1].enviar(b':' + nick + b' QUIT :Connection closed' + b'\r\n')
     print(conexao, 'conexão fechada')
     conexao.fechar()
 
