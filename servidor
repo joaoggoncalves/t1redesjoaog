@@ -16,12 +16,15 @@ def sair(conexao):
     print(conexao, 'conexão fechada')
     conexao.fechar()
 
-def avisacanal(nomecanalmsg, conexao):
+def avisacanal(nomecanalmsg, conexao, join):
     global dictnicks
     global dictcanais
     if nomecanalmsg in dictcanais.keys():
         for i in range(len(dictcanais[nomecanalmsg])):
-            dictcanais[nomecanalmsg][i-1].enviar(b':' + dictnicks[conexao] + b' JOIN :#' + nomecanalmsg + b'\r\n')
+            if join:
+                dictcanais[nomecanalmsg][i-1].enviar(b':' + dictnicks[conexao] + b' JOIN :#' + nomecanalmsg + b'\r\n')
+            else:
+                dictcanais[nomecanalmsg][i-1].enviar(b':' + dictnicks[conexao] + b' PART #' + nomecanalmsg + b'\r\n')
 
 def mandamsgcanal(nomecanalmsg, conexao, conteudo):
     global dictnicks
@@ -97,12 +100,29 @@ def dados_recebidos(conexao, dados):
                 if validar_nome(nomecanal):
                     dictcanais.setdefault(nomecanal, [])
                     dictcanais[nomecanal].append(conexao)
-                    avisacanal(nomecanal, conexao)
+                    avisacanal(nomecanal, conexao, True)
                 else:
                     conexao.enviar(b':server 403 ' + nomecanal + b' :No such channel\r\n')
             except IndexError:
                 conexao.enviar(b':server 403 * :No such channel\r\n')
-
+        
+        #TRATAMENTO PART
+        if dadosatual[msgparcial].startswith(b'PART'):
+            try:
+                nomecanal = dadosatual[msgparcial].split(b' #',1)[1]
+                nomecanal = nomecanal.split(b'\r')[0]
+                nomecanal = nomecanal.split(b' :',1)[0]
+                nomecanal = nomecanal.lower()
+                if validar_nome(nomecanal):
+                    if nomecanal in dictcanais.keys():
+                        if conexao in dictcanais[nomecanal]:
+                            avisacanal(nomecanal, conexao, False)
+                            dictcanais[nomecanal].remove(conexao)
+                            #print(b'FLAG')
+                else:
+                    conexao.enviar(b':server 403 ' + nomecanal + b' :No such channel\r\n')
+            except IndexError:
+                conexao.enviar(b':server 403 * :No such channel\r\n')
         
         #TRATAMENTO PRIVMSG
         if dadosatual[msgparcial].startswith(b'PRIVMSG'):
