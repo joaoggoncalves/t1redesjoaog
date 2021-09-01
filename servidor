@@ -13,6 +13,16 @@ def validar_nome(nome):
 
 
 def sair(conexao):
+    global dictcanais
+    global dictnicks
+    nick = dictnicks[conexao]
+    dictnicksupper.pop(conexao)
+    dictnicks.pop(conexao)
+    for canaisuser in dictcanais.keys():
+        if conexao in dictcanais[canaisuser]:
+            dictcanais[canaisuser].remove(conexao)
+            for x in range(len(dictcanais[canaisuser])):
+                dictcanais[canaisuser][x-1].enviar(b':' + nick + b' QUIT :Connection closed' + b'\r\n')
     print(conexao, 'conexão fechada')
     conexao.fechar()
 
@@ -25,6 +35,28 @@ def avisacanal(nomecanalmsg, conexao, join):
                 dictcanais[nomecanalmsg][i-1].enviar(b':' + dictnicks[conexao] + b' JOIN :#' + nomecanalmsg + b'\r\n')
             else:
                 dictcanais[nomecanalmsg][i-1].enviar(b':' + dictnicks[conexao] + b' PART #' + nomecanalmsg + b'\r\n')
+
+def envialistacanal(nomecanal, conexao):
+    global dictcanais
+    global dictnicks
+    listaconexoes = dictcanais[nomecanal]
+    listanicks = []
+    nomecanal = b'#' + nomecanal
+    mensagem2 = b':server 353 ' + dictnicks[conexao] + b' = ' + nomecanal + b' :'
+    for i in listaconexoes:
+        listanicks.append(dictnicks[i])
+    listanicks.sort()
+    #mensagem = b':server 353 ' + dictnicks[conexao] + b' = ' + nomecanal + b' :' + b' '.join(listanicks) + b'\r\n'
+    for x in listanicks:
+        if len(mensagem2 + x + b'\r\n') <= 512:
+            mensagem2 = mensagem2 + x + b' '
+        else:
+            mensagem2 = mensagem2 + b'\r\n'
+            conexao.enviar(mensagem2) 
+            mensagem2 = b':server 353 ' + dictnicks[conexao] + b' = ' + nomecanal + b' :' + x + b' '
+    mensagem2 = mensagem2 + b'\r\n'
+    conexao.enviar(mensagem2)
+    conexao.enviar(b':server 366 ' + dictnicks[conexao] + b' ' + nomecanal + b' :End of /NAMES list.\r\n')
 
 def mandamsgcanal(nomecanalmsg, conexao, conteudo):
     global dictnicks
@@ -101,6 +133,7 @@ def dados_recebidos(conexao, dados):
                     dictcanais.setdefault(nomecanal, [])
                     dictcanais[nomecanal].append(conexao)
                     avisacanal(nomecanal, conexao, True)
+                    envialistacanal(nomecanal, conexao)
                 else:
                     conexao.enviar(b':server 403 ' + nomecanal + b' :No such channel\r\n')
             except IndexError:
@@ -118,7 +151,6 @@ def dados_recebidos(conexao, dados):
                         if conexao in dictcanais[nomecanal]:
                             avisacanal(nomecanal, conexao, False)
                             dictcanais[nomecanal].remove(conexao)
-                            #print(b'FLAG')
                 else:
                     conexao.enviar(b':server 403 ' + nomecanal + b' :No such channel\r\n')
             except IndexError:
