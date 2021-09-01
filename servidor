@@ -6,6 +6,7 @@ import re
 msganterior = b''
 dictnicks = {}
 dictnicksupper = {}
+dictcanais = {}
 
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
@@ -15,11 +16,36 @@ def sair(conexao):
     print(conexao, 'conexão fechada')
     conexao.fechar()
 
+def avisacanal(nomecanalmsg, conexao):
+    global dictnicks
+    global dictcanais
+    if nomecanalmsg in dictcanais.keys():
+        for i in range(len(dictcanais[nomecanalmsg])):
+            dictcanais[nomecanalmsg][i-1].enviar(b':' + dictnicks[conexao] + b' JOIN :#' + nomecanalmsg + b'\r\n')
+
+def mandamsgcanal(nomecanalmsg, conexao, conteudo):
+    global dictnicks
+    global dictcanais
+    nomecanalmsg = nomecanalmsg.lower()
+    if nomecanalmsg in dictcanais.keys():
+        for i in range(len(dictcanais[nomecanalmsg])):
+            if dictcanais[nomecanalmsg][i-1] != conexao:
+                dictcanais[nomecanalmsg][i-1].enviar(b':' + dictnicks[conexao] + b' PRIVMSG #' + nomecanalmsg + b' :' + conteudo + b'\n')
+
+def mandamsguser(conexao, nickdestupper, conteudo, nickdest):
+    global dictnicks
+    global dictnicksupper
+    if nickdestupper in dictnicksupper.values():
+        for key, value in dictnicksupper.items():
+            if value == nickdestupper:
+                key.enviar(b':' + dictnicks[conexao] + b' PRIVMSG ' + nickdest + b' :' + conteudo + b'\n') 
+
 
 def dados_recebidos(conexao, dados):
     global msganterior
     global dictnicks
     global dictnicksupper
+    global dictcanais
 
     dados = msganterior + dados
     if dados == b'':
@@ -61,17 +87,35 @@ def dados_recebidos(conexao, dados):
                         conexao.enviar(b':server 433 ' + dictnicks[conexao] + b' ' + nick + b' :Nickname is already in use\r\n')
             else:
                 conexao.enviar(b':server 432 * ' + nick + b' :Erroneous nickname\r\n')
+
+        #TRATAMENTO JOIN
+        if dadosatual[msgparcial].startswith(b'JOIN'):
+            try:
+                nomecanal = dadosatual[msgparcial].split(b' #',1)[1]
+                nomecanal = nomecanal.split(b'\r')[0]
+                nomecanal = nomecanal.lower()
+                if validar_nome(nomecanal):
+                    dictcanais.setdefault(nomecanal, [])
+                    dictcanais[nomecanal].append(conexao)
+                    avisacanal(nomecanal, conexao)
+                else:
+                    conexao.enviar(b':server 403 ' + nomecanal + b' :No such channel\r\n')
+            except IndexError:
+                conexao.enviar(b':server 403 * :No such channel\r\n')
+
         
         #TRATAMENTO PRIVMSG
         if dadosatual[msgparcial].startswith(b'PRIVMSG'):
             nickdest = dadosatual[msgparcial].split(b' ')[1]
             conteudo = dadosatual[msgparcial].split(b' :',1)[1]
             nickdestupper = nickdest.upper()
-            if nickdestupper in dictnicksupper.values():
-                for key, value in dictnicksupper.items():
-                    if value == nickdestupper:
-                        key.enviar(b':' + dictnicks[conexao] + b' PRIVMSG ' + nickdest + b' :' + conteudo + b'\n') 
-                #conexaodest.enviar(b':' + dictnicks[conexao] + b' PRIVMSG ' + dictnicks[conexaodest] + b' :' + conteudo + b'\r\n') 
+            #MENSAGEM PARA USUARIO
+            mandamsguser(conexao, nickdestupper, conteudo, nickdest)
+            #MENSAGEM PARA CANAL
+            if nickdest.startswith(b'#'):
+                nomecanalmsg = nickdest.split(b'#')[1]
+                mandamsgcanal(nomecanalmsg, conexao, conteudo)
+
 
       
     print(conexao, dados)
